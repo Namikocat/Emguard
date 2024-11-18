@@ -79,7 +79,7 @@ class PEFeatureExtractor:
         return features
 
 # Streamlit UI
-st.title("Malware Detection with .h5 Model")
+st.title("Emgaurd Virus detection")
 
 uploaded_file = st.file_uploader("Upload a PE file (.exe, .dll)", type=["exe", "dll"])
 
