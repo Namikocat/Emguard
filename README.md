@@ -1,19 +1,17 @@
-# 🎈 Blank app template
+ยินดีต้อนรับทุกคนสู่ โปรเจคEmguard
+โปรเจคนี้คือโปรเจคในการ Detect ไวรัสคอมพิวเตอร์โดยเพียงแค่อัปไฟล์ 
 
-A simple Streamlit app template for you to modify!
+Data set of this project
+Ember Data set Frome this link
+https://ember.elastic.co/ember_dataset_2018_2.tar.bz2
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://blank-app-template.streamlit.app/)
+Train by Neuron network
 
-### How to run it on your own machine
+Use with this link
 
-1. Install the requirements
+https://virusdetect.streamlit.app/
 
-   ```
-   $ pip install -r requirements.txt
-   ```
+This is my blog link https://medium.com/@jinnathit/emguard-virus-file-detection-5f43a6f1d25f
 
-2. Run the app
+If  you have any question Please email to me : jinnathit@gmail.com
 
-   ```
-   $ streamlit run streamlit_app.py
-   ```
