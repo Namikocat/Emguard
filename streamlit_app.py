@@ -7,7 +7,7 @@ import lief
 MODEL_PATH = "Virus_detect.h5"  # Adjust to the correct path of your uploaded model
 model = tf.keras.models.load_model(MODEL_PATH)
 
-# Feature extraction classes
+# Feature extraction classes (same as before)
 class ByteHistogram:
     def feature_vector(self, bytez):
         counts = np.bincount(np.frombuffer(bytez, dtype=np.uint8), minlength=256)
@@ -52,7 +52,6 @@ class PEFeatureExtractor:
     def extract_features(self, bytez):
         byte_hist = ByteHistogram().feature_vector(bytez)
         byte_entropy_hist = ByteEntropyHistogram().feature_vector(bytez)
-        # Adjusted for parsing raw bytes
         lief_binary = lief.parse(raw=bytez)
 
         if lief_binary:
@@ -79,37 +78,63 @@ class PEFeatureExtractor:
         return features
 
 # Streamlit UI
-st.title("Emgaurd Virus detection")
+st.set_page_config(
+    page_title="Emguard Virus Detection",
+    page_icon="🛡️",
+    layout="centered",
+    initial_sidebar_state="expanded"
+)
 
-uploaded_file = st.file_uploader("Upload a PE file (.exe, .dll)", type=["exe", "dll"])
+# Header
+st.markdown(
+    """
+    <style>
+    .main { background-color: #f9f9f9; }
+    .stButton>button { background-color: #007bff; color: white; border-radius: 5px; }
+    .stFileUploader>div { background-color: #e9ecef; border-radius: 5px; }
+    .result { font-size: 18px; font-weight: bold; }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-if uploaded_file is not None:
+st.title("🛡️ Emguard Virus Detection")
+st.write("Upload your PE file to check if it's safe or malicious.")
+
+# File uploader
+uploaded_file = st.file_uploader(
+    "Upload a Portable Executable (PE) file (.exe, .dll)",
+    type=["exe", "dll"],
+    help="Only files with .exe and .dll extensions are supported."
+)
+
+if uploaded_file:
     bytez = uploaded_file.read()
-    extractor = PEFeatureExtractor()
-    feature_vector = extractor.extract_features(bytez)
+    with st.spinner("Analyzing the file..."):
+        extractor = PEFeatureExtractor()
+        feature_vector = extractor.extract_features(bytez)
 
     if feature_vector is not None:
-        # Check expected input size for the model
-        expected_columns = model.input_shape[-1]  # Expected number of features for the model
+        expected_columns = model.input_shape[-1]
 
-        # Adjust feature vector size to match model input
         if len(feature_vector) > expected_columns:
-            # Truncate the feature vector
             feature_vector = feature_vector[:expected_columns]
         elif len(feature_vector) < expected_columns:
-            # Pad the feature vector with zeros
             feature_vector = np.pad(feature_vector, (0, expected_columns - len(feature_vector)), 'constant')
 
-        # Predict using the model
         prediction = model.predict(np.expand_dims(feature_vector, axis=0))[0]
-
-        # Get scalar value if prediction is an array
         prediction_value = prediction[0] if isinstance(prediction, (np.ndarray, list)) else prediction
 
-        # Display results
+        st.subheader("🔍 Detection Results")
         if prediction_value > 0.5:
-            st.error(f"The uploaded file is classified as Malware with confidence {prediction_value * 100:.2f}%")
+            st.error(
+                f"The uploaded file is **Malicious** with a confidence of **{prediction_value * 100:.2f}%**.",
+                icon="🚨"
+            )
         else:
-            st.success(f"The uploaded file is classified as Safe with confidence {(1 - prediction_value) * 100:.2f}%")
+            st.success(
+                f"The uploaded file is **Safe** with a confidence of **{(1 - prediction_value) * 100:.2f}%**.",
+                icon="✅"
+            )
     else:
-        st.error('ไม่สามารถสกัดฟีเจอร์จากไฟล์ที่อัปโหลดได้')
+        st.error("Unable to extract features from the uploaded file. Please ensure the file is valid.", icon="⚠️")
