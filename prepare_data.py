@@ -10,8 +10,9 @@ Each weekly .jsonl inside the zips is streamed (not unpacked to disk), labeled
 samples are vectorized with features.vectorize, and the results are written to
 data/train.npz, data/test.npz and data/challenge.npz.
 
-Win32 has 3x more files per week than the other types, so only every third
-Win32 record is kept (WIN32_KEEP_EVERY) to keep the arrays a manageable size.
+The full dataset (~4.2M PE training samples) does not fit in memory on a
+typical machine, so records are subsampled evenly across all weeks (KEEP_EVERY):
+about 950k training samples and 520k test samples.
 """
 
 import os
@@ -31,7 +32,12 @@ except ImportError:  # pragma: no cover
 
 from features import vectorize
 
-WIN32_KEEP_EVERY = 3
+# Keep every Nth record of each file (per week: Win32 60k, Win64 20k, .NET 10k).
+KEEP_EVERY = {
+    "Win32_train.zip": 9, "Win64_train.zip": 3, "Dot_Net_train.zip": 2,
+    "Win32_test.zip": 3, "Win64_test.zip": 1, "Dot_Net_test.zip": 1,
+    "challenge.zip": 1,
+}
 SPLITS = {
     "train": ["Win32_train.zip", "Win64_train.zip", "Dot_Net_train.zip"],
     "test": ["Win32_test.zip", "Win64_test.zip", "Dot_Net_test.zip"],
@@ -66,15 +72,17 @@ def main(folder):
             path = os.path.join(folder, name)
             if not os.path.exists(path):
                 sys.exit(f"Missing {path}")
-            keep = WIN32_KEEP_EVERY if name.startswith("Win32") else 1
+            keep = KEEP_EVERY[name]
             with zipfile.ZipFile(path) as z:
                 jobs += [(path, m, keep) for m in z.namelist() if m.endswith(".jsonl")]
         with Pool() as pool:
             results = [r for r in pool.imap_unordered(convert_member, jobs) if r is not None]
         X = np.concatenate([r[0] for r in results])
         y = np.concatenate([r[1] for r in results])
+        del results
         np.savez(f"data/{split}.npz", X=X, y=y)
         print(f"Saved data/{split}.npz: {len(y)} samples ({int(y.sum())} malicious)", flush=True)
+        del X, y
 
 
 if __name__ == "__main__":
