@@ -27,9 +27,17 @@ If  you have any question Please email to me : jinnathit@gmail.com
 
 ### Files
 - `streamlit_app.py` — เว็บแอป
-- `features.py` — ดึงฟีเจอร์จากไฟล์ PE ตามนิยามของ EMBER
-- `train_model.py` — เทรนโมเดลใหม่ (`python train_model.py ember2018/train_features_1.jsonl`)
+- `features.py` — ดึงฟีเจอร์จากไฟล์ PE ตามนิยามของ EMBER (ใช้ร่วมกันทั้งตอนเทรนและในแอป)
+- `prepare_data.py` — แปลง EMBER 2018 ทั้งชุดเป็น `data/train.npz`, `data/test.npz`
+- `train_model.py` — เทรนโมเดล Neural Network
 - `Virus_detect.keras`, `scaler.json` — โมเดลและค่า preprocessing
+
+Retrain:
+```
+pip install -r requirements.txt scikit-learn
+python prepare_data.py path/to/ember2018
+python train_model.py
+```
 
 Run locally:
 ```
