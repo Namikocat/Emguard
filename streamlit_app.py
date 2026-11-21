@@ -5,7 +5,7 @@ import numpy as np
 import streamlit as st
 import tensorflow as tf
 
-from features import FEATURE_NAMES, extract_features, parse_pe, transform
+from features import FEATURE_NAMES, parse_pe, raw_features, summary, vectorize
 
 APP_DIR = Path(__file__).parent
 MODEL_PATH = APP_DIR / "Virus_detect.keras"
@@ -26,15 +26,15 @@ def load_scaler():
         data = json.load(f)
     if data["feature_names"] != FEATURE_NAMES:
         raise ValueError("scaler.json does not match the feature list in features.py")
-    return data["log1p"], np.array(data["mean"]), np.array(data["scale"])
+    log_idx = [FEATURE_NAMES.index(name) for name in data["log1p"]]
+    return log_idx, np.array(data["mean"]), np.array(data["scale"])
 
 
-def prepare_input(features, use_log1p, mean, scale):
-    """Order, transform and standardize features the same way as in training."""
-    x = np.array([features[name] for name in FEATURE_NAMES], dtype=np.float64)
-    if use_log1p:
-        x = transform(x)
-    return ((x - mean) / scale)[np.newaxis, :]
+def prepare_input(raw, log_idx, mean, scale):
+    """Vectorize, log-transform and standardize features the same way as in training."""
+    x = vectorize(raw).astype(np.float64)
+    x[log_idx] = np.log1p(np.clip(x[log_idx], 0, None))
+    return ((x - mean) / scale)[np.newaxis, :].astype(np.float32)
 
 
 # Streamlit UI
@@ -86,8 +86,8 @@ if uploaded_file:
                 icon="⚠️",
             )
             st.stop()
-        features = extract_features(bytez, binary)
-        probs = model.predict(prepare_input(features, *preprocessing), verbose=0)[0]
+        raw = raw_features(bytez, binary)
+        probs = model.predict(prepare_input(raw, *preprocessing), verbose=0)[0]
 
     malicious_prob = float(probs[MALICIOUS_CLASS])
 
@@ -104,7 +104,7 @@ if uploaded_file:
         )
 
     with st.expander("Extracted features"):
-        st.json(features)
+        st.json(summary(raw))
 
 st.caption(
     "Emguard is a machine-learning model and can make mistakes. "
