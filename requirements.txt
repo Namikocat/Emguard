@@ -1,4 +1,4 @@
-streamlit
-tensorflow
-numpy
-lief
+streamlit>=1.30
+tensorflow>=2.16
+numpy>=1.22
+lief>=0.15
