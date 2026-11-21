@@ -5,7 +5,7 @@ import numpy as np
 import streamlit as st
 import tensorflow as tf
 
-from features import FEATURE_NAMES, parse_pe, raw_features, summary, vectorize
+from features import N_FEATURES, parse_pe, raw_features, summary, vectorize
 
 APP_DIR = Path(__file__).parent
 MODEL_PATH = APP_DIR / "Virus_detect.keras"
@@ -24,16 +24,14 @@ def load_model():
 def load_scaler():
     with open(SCALER_PATH) as f:
         data = json.load(f)
-    if data["feature_names"] != FEATURE_NAMES:
-        raise ValueError("scaler.json does not match the feature list in features.py")
-    log_idx = [FEATURE_NAMES.index(name) for name in data["log1p"]]
-    return log_idx, np.array(data["mean"]), np.array(data["scale"])
+    if data["n_features"] != N_FEATURES:
+        raise ValueError("scaler.json does not match the features in features.py")
+    return np.array(data["mean"]), np.array(data["scale"])
 
 
-def prepare_input(raw, log_idx, mean, scale):
-    """Vectorize, log-transform and standardize features the same way as in training."""
+def prepare_input(raw, mean, scale):
+    """Vectorize and standardize features the same way as in training."""
     x = vectorize(raw).astype(np.float64)
-    x[log_idx] = np.log1p(np.clip(x[log_idx], 0, None))
     return ((x - mean) / scale)[np.newaxis, :].astype(np.float32)
 
 

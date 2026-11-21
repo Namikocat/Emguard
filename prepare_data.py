@@ -1,52 +1,80 @@
-"""Convert EMBER 2018 feature files into model input arrays.
+"""Convert EMBER2024 PE feature files into model input arrays.
 
-Reads ember2018/train_features_*.jsonl and ember2018/test_features.jsonl,
-keeps labeled samples (0 = benign, 1 = malicious), turns each record into a
-vector with features.vectorize, and writes data/train.npz and data/test.npz.
+Download the PE parts of EMBER2024 from https://huggingface.co/datasets/joyce8/EMBER2024
+(Win32_train.zip, Win64_train.zip, Dot_Net_train.zip, the matching *_test.zip files
+and challenge.zip) into one folder, then run:
 
-Usage:
-    python prepare_data.py path/to/ember2018
-The data comes from https://ember.elastic.co/ember_dataset_2018_2.tar.bz2
+    python prepare_data.py path/to/zip/folder
+
+Each weekly .jsonl inside the zips is streamed (not unpacked to disk), labeled
+samples are vectorized with features.vectorize, and the results are written to
+data/train.npz, data/test.npz and data/challenge.npz.
+
+Win32 has 3x more files per week than the other types, so only every third
+Win32 record is kept (WIN32_KEEP_EVERY) to keep the arrays a manageable size.
 """
 
-import glob
-import json
 import os
+import subprocess
 import sys
+import zipfile
 from multiprocessing import Pool
 
 import numpy as np
 
+try:
+    import orjson as json_lib
+    loads = json_lib.loads
+except ImportError:  # pragma: no cover
+    import json as json_lib
+    loads = json_lib.loads
+
 from features import vectorize
 
+WIN32_KEEP_EVERY = 3
+SPLITS = {
+    "train": ["Win32_train.zip", "Win64_train.zip", "Dot_Net_train.zip"],
+    "test": ["Win32_test.zip", "Win64_test.zip", "Dot_Net_test.zip"],
+    "challenge": ["challenge.zip"],
+}
 
-def convert(path):
+
+def convert_member(job):
+    zip_path, member, keep_every = job
     X, y = [], []
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            d = json.loads(line)
-            if d["label"] in (0, 1):
-                X.append(vectorize(d))
-                y.append(d["label"])
-    print(f"{os.path.basename(path)}: {len(y)} labeled samples", flush=True)
+    proc = subprocess.Popen(["unzip", "-p", zip_path, member], stdout=subprocess.PIPE, bufsize=1 << 20)
+    for i, line in enumerate(proc.stdout):
+        if i % keep_every:
+            continue
+        d = loads(line)
+        if d.get("label") not in (0, 1):
+            continue
+        X.append(vectorize(d))
+        y.append(d["label"])
+    proc.wait()
+    print(f"{os.path.basename(zip_path)}:{member}: {len(y)} samples", flush=True)
+    if not y:
+        return None
     return np.stack(X), np.array(y, dtype=np.int8)
 
 
-def main(ember_dir):
-    train_files = sorted(glob.glob(os.path.join(ember_dir, "train_features_*.jsonl")))
-    test_file = os.path.join(ember_dir, "test_features.jsonl")
-    if not train_files or not os.path.exists(test_file):
-        sys.exit(f"EMBER feature files not found in {ember_dir}")
-
-    with Pool() as pool:
-        results = pool.map(convert, train_files + [test_file])
-
+def main(folder):
     os.makedirs("data", exist_ok=True)
-    X_train = np.concatenate([r[0] for r in results[:-1]])
-    y_train = np.concatenate([r[1] for r in results[:-1]])
-    np.savez("data/train.npz", X=X_train, y=y_train)
-    np.savez("data/test.npz", X=results[-1][0], y=results[-1][1])
-    print(f"Saved data/train.npz ({len(y_train)}) and data/test.npz ({len(results[-1][1])})")
+    for split, zips in SPLITS.items():
+        jobs = []
+        for name in zips:
+            path = os.path.join(folder, name)
+            if not os.path.exists(path):
+                sys.exit(f"Missing {path}")
+            keep = WIN32_KEEP_EVERY if name.startswith("Win32") else 1
+            with zipfile.ZipFile(path) as z:
+                jobs += [(path, m, keep) for m in z.namelist() if m.endswith(".jsonl")]
+        with Pool() as pool:
+            results = [r for r in pool.imap_unordered(convert_member, jobs) if r is not None]
+        X = np.concatenate([r[0] for r in results])
+        y = np.concatenate([r[1] for r in results])
+        np.savez(f"data/{split}.npz", X=X, y=y)
+        print(f"Saved data/{split}.npz: {len(y)} samples ({int(y.sum())} malicious)", flush=True)
 
 
 if __name__ == "__main__":
